@@ -1,118 +1,119 @@
-import os
 import openai
 import pandas as pd
-import plotly.express as px
 import streamlit as st
+import matplotlib.pyplot as plt
 
-# Configura tu clave de OpenAI desde la variable de entorno
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
-if not openai.api_key:
-    st.error("La clave de la API de OpenAI no está configurada. Por favor, configúrala como una variable de entorno llamada 'OPENAI_API_KEY'.")
-    st.stop()
+# Configura a chave da OpenAI
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # ----------------------------------------------------------
-# PARTE 1: Análisis de Datos de Exportación de Vinhos
+# PARTE 1: Análise de Dados de Exportação de Vinhos
 # ----------------------------------------------------------
 
 @st.cache_data
-def cargar_datos():
-    # URL del dataset
+def carregar_dados():
     url = "https://drive.google.com/uc?id=1-mrtTLjOPh_XVk1mkDH00SUJxWkuOu5o"
-    datos = pd.read_csv(url, delimiter=';', encoding='utf-8', quotechar='"')
-    datos.columns = datos.columns.str.strip()
-    return datos
+    dados = pd.read_csv(url, delimiter=';', encoding='utf-8', quotechar='"')
+    dados.columns = dados.columns.str.strip()
+    return dados
 
-# Cargar datos
-df = cargar_datos()
+# Carregar os dados
+df = carregar_dados()
 
-# Título del Proyecto
-st.title("🍷 Análisis de Datos de Exportación de Vinhos + Chatbot GPT-3.5")
-st.markdown("Este proyecto combina **análisis de datos** de exportación de vinhos brasileños con un **chatbot** GPT-3.5 para consultas avanzadas.")
+# Layout do app
+st.title("🍷 Análise de Exportação de Vinhos + Bah Chat")
+st.markdown(
+    """
+    Bem-vindo ao **Bah Chat**, o chatbot e ferramenta de análise de dados de exportação de vinhos brasileiros.
+    Use os gráficos interativos e interaja com o chatbot para explorar os dados de exportação de vinhos.
+    """
+)
 
-# Mostrar datos generales
-st.subheader("Vista General de los Datos")
+# Dados gerais
+st.subheader("📊 Dados Gerais de Exportação")
 st.dataframe(df)
 
-# Filtros interactivos
-st.sidebar.header("Filtros Interactivos")
-anos = st.sidebar.multiselect("Selecciona Años", df['Año'].unique(), default=df['Año'].unique())
-paises = st.sidebar.multiselect("Selecciona Países", df['País'].unique(), default=df['País'].unique()[:10])
+# Filtros interativos
+st.sidebar.header("🔍 Filtros Interativos")
+anos = st.sidebar.multiselect(
+    "Selecione os Anos", 
+    df['Año'].unique(), 
+    default=df['Año'].unique()
+)
+df_filtrado = df[df['Año'].isin(anos)]
 
-# Aplicar filtros
-df_filtrado = df[df['Año'].isin(anos) & df['País'].isin(paises)]
+paises = st.sidebar.multiselect(
+    "Selecione os Países", 
+    df['País'].unique(), 
+    default=df['País'].unique()[:10]
+)
+df_filtrado = df_filtrado[df_filtrado['País'].isin(paises)]
 
-st.subheader("Datos Filtrados")
+st.subheader("🔎 Dados Filtrados")
 st.dataframe(df_filtrado)
 
-# Gráfico 1: Tendencia de Exportación
-st.subheader("Tendencia de Exportación (US$ FOB por Año)")
-if not df_filtrado.empty:
-    fig = px.line(
-        df_filtrado.groupby('Año')['Valor US$ FOB'].sum().reset_index(),
-        x='Año',
-        y='Valor US$ FOB',
-        title='Tendencia de Exportación de Vinhos',
-        markers=True
-    )
-    st.plotly_chart(fig)
-else:
-    st.warning("No hay datos para mostrar en este gráfico.")
+# Gráfico 1: Tendência de Exportação
+st.subheader("📈 Tendência de Exportação (US$ FOB por Ano)")
+fig, ax = plt.subplots(figsize=(10, 4))
+df_group_ano = df_filtrado.groupby('Año')['Valor US$ FOB'].sum().sort_index()
+ax.plot(df_group_ano.index, df_group_ano.values, color='#8B0000', marker='o')
+ax.set_title("Tendência de Exportação de Vinhos", fontsize=16, color='#8B0000')
+ax.set_xlabel("Ano", fontsize=14)
+ax.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
+st.pyplot(fig)
 
-# Gráfico 2: Exportación por País
-st.subheader("Exportación por País")
-if not df_filtrado.empty:
-    fig = px.bar(
-        df_filtrado.groupby('País')['Valor US$ FOB'].sum().reset_index().sort_values(by='Valor US$ FOB', ascending=False).head(10),
-        x='País',
-        y='Valor US$ FOB',
-        title='Top 10 Países de Destino'
-    )
-    st.plotly_chart(fig)
-else:
-    st.warning("No hay datos para mostrar en este gráfico.")
+# Gráfico 2: Exportação por País
+st.subheader("🌍 Exportação por País")
+fig, ax = plt.subplots(figsize=(10, 4))
+df_group_pais = df_filtrado.groupby('País')['Valor US$ FOB'].sum().sort_values(ascending=False).head(10)
+df_group_pais.plot(kind='bar', color='#A52A2A', ax=ax)
+ax.set_title("Top 10 Países de Destino", fontsize=16, color='#8B0000')
+ax.set_xlabel("País", fontsize=14)
+ax.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
+st.pyplot(fig)
 
 # ----------------------------------------------------------
-# PARTE 2: Chatbot
+# PARTE 2: Bah Chat
 # ----------------------------------------------------------
 
-st.subheader("🤖 Chatbot GPT-3.5")
+st.subheader("🤖 Bah Chat")
 
-# Almacenar mensajes en session_state
+# Inicializa o histórico de mensagens
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Mostrar mensajes anteriores
+# Exibe as mensagens anteriores
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Campo de entrada para usuario
-prompt = st.chat_input("Escribe tu pregunta o solicitud...")
+# Entrada de texto do usuário
+prompt = st.chat_input("Digite sua pergunta ou solicitação...")
 if prompt:
-    # Añadir el mensaje del usuario al historial
+    # Adiciona a mensagem do usuário ao histórico
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Faz a chamada para a API do ChatGPT
     try:
-     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=st.session_state.messages
-    )
-    # Extraer la respuesta del chatbot
-    answer = response["choices"][0]["message"]["content"]
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=st.session_state.messages
+        )
+        # Obtém a resposta
+        answer = response["choices"][0]["message"]["content"]
 
-    # Mostrar la respuesta del asistente
-    with st.chat_message("assistant"):
-        st.markdown(answer)
+        # Exibe a resposta no chat
+        with st.chat_message("assistant"):
+            st.markdown(answer)
 
-    # Guardar la respuesta en el historial
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+        # Adiciona a resposta ao histórico
+        st.session_state.messages.append({"role": "assistant", "content": answer})
 
-except Exception as e:
-    st.error(f"Error al conectar con OpenAI: {e}")
+    except Exception as e:
+        st.error(f"Erro ao conectar com o Bah Chat: {e}")
 
-# ----------------------------------------------------------
-# FIM
-# ----------------------------------------------------------
+# Fim do app
+st.markdown("---")
+st.markdown("💡 **Dica:** Use o Bah Chat para obter insights rápidos sobre os dados.")
