@@ -96,23 +96,22 @@ if prompt:
         st.markdown(prompt)
 
     try:
-        # Llamada al modelo GPT-3.5
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=st.session_state.messages
-        )
-        # Extraer la respuesta del chatbot
-        answer = response["choices"][0]["message"]["content"]
+     response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=st.session_state.messages
+    )
+    # Extraer la respuesta del chatbot
+    answer = response["choices"][0]["message"]["content"]
 
-        # Mostrar la respuesta del asistente
-        with st.chat_message("assistant"):
-            st.markdown(answer)
+    # Mostrar la respuesta del asistente
+    with st.chat_message("assistant"):
+        st.markdown(answer)
 
-        # Guardar la respuesta en el historial
-        st.session_state.messages.append({"role": "assistant", "content": answer})
+    # Guardar la respuesta en el historial
+    st.session_state.messages.append({"role": "assistant", "content": answer})
 
-    except Exception as e:
-        st.error(f"Error al conectar con OpenAI: {e}")
+except Exception as e:
+    st.error(f"Error al conectar con OpenAI: {e}")
 
 # ----------------------------------------------------------
 # FIM
