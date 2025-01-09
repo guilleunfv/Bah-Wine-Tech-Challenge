@@ -1,10 +1,16 @@
+import os
 import openai
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
-# Configura a chave da OpenAI
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Configuração da chave API da OpenAI
+api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("openai_api_key")
+if not api_key:
+    st.error("A chave API da OpenAI não foi encontrada. Configure-a no `secrets` ou como variável de ambiente.")
+    st.stop()
+
+openai.api_key = api_key
 
 # ----------------------------------------------------------
 # PARTE 1: Análise de Dados de Exportação de Vinhos
@@ -54,23 +60,29 @@ st.dataframe(df_filtrado)
 
 # Gráfico 1: Tendência de Exportação
 st.subheader("📈 Tendência de Exportação (US$ FOB por Ano)")
-fig, ax = plt.subplots(figsize=(10, 4))
-df_group_ano = df_filtrado.groupby('Año')['Valor US$ FOB'].sum().sort_index()
-ax.plot(df_group_ano.index, df_group_ano.values, color='#8B0000', marker='o')
-ax.set_title("Tendência de Exportação de Vinhos", fontsize=16, color='#8B0000')
-ax.set_xlabel("Ano", fontsize=14)
-ax.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
-st.pyplot(fig)
+if not df_filtrado.empty:
+    fig, ax = plt.subplots(figsize=(10, 4))
+    df_group_ano = df_filtrado.groupby('Año')['Valor US$ FOB'].sum().sort_index()
+    ax.plot(df_group_ano.index, df_group_ano.values, color='#8B0000', marker='o')
+    ax.set_title("Tendência de Exportação de Vinhos", fontsize=16, color='#8B0000')
+    ax.set_xlabel("Ano", fontsize=14)
+    ax.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
+    st.pyplot(fig)
+else:
+    st.warning("Não há dados para exibir no gráfico.")
 
 # Gráfico 2: Exportação por País
 st.subheader("🌍 Exportação por País")
-fig, ax = plt.subplots(figsize=(10, 4))
-df_group_pais = df_filtrado.groupby('País')['Valor US$ FOB'].sum().sort_values(ascending=False).head(10)
-df_group_pais.plot(kind='bar', color='#A52A2A', ax=ax)
-ax.set_title("Top 10 Países de Destino", fontsize=16, color='#8B0000')
-ax.set_xlabel("País", fontsize=14)
-ax.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
-st.pyplot(fig)
+if not df_filtrado.empty:
+    fig, ax = plt.subplots(figsize=(10, 4))
+    df_group_pais = df_filtrado.groupby('País')['Valor US$ FOB'].sum().sort_values(ascending=False).head(10)
+    df_group_pais.plot(kind='bar', color='#A52A2A', ax=ax)
+    ax.set_title("Top 10 Países de Destino", fontsize=16, color='#8B0000')
+    ax.set_xlabel("País", fontsize=14)
+    ax.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
+    st.pyplot(fig)
+else:
+    st.warning("Não há dados para exibir no gráfico.")
 
 # ----------------------------------------------------------
 # PARTE 2: Bah Chat
@@ -78,16 +90,30 @@ st.pyplot(fig)
 
 st.subheader("🤖 Bah Chat")
 
+# Função para gerar resposta
+def gerar_resposta(messages):
+    """
+    Gera uma resposta usando o modelo GPT-3.5 da OpenAI.
+    """
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+        )
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Erro ao conectar com o Bah Chat: {e}"
+
 # Inicializa o histórico de mensagens
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = [{"role": "system", "content": "Você é um assistente útil para análise de exportação de vinhos."}]
 
-# Exibe as mensagens anteriores
+# Exibe as mensagens antigas
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Entrada de texto do usuário
+# Entrada do usuário
 prompt = st.chat_input("Digite sua pergunta ou solicitação...")
 if prompt:
     # Adiciona a mensagem do usuário ao histórico
@@ -95,25 +121,10 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Faz a chamada para a API do ChatGPT
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=st.session_state.messages
-        )
-        # Obtém a resposta
-        answer = response["choices"][0]["message"]["content"]
+    # Chama a API OpenAI para gerar a resposta
+    resposta = gerar_resposta(st.session_state.messages)
 
-        # Exibe a resposta no chat
-        with st.chat_message("assistant"):
-            st.markdown(answer)
-
-        # Adiciona a resposta ao histórico
-        st.session_state.messages.append({"role": "assistant", "content": answer})
-
-    except Exception as e:
-        st.error(f"Erro ao conectar com o Bah Chat: {e}")
-
-# Fim do app
-st.markdown("---")
-st.markdown("💡 **Dica:** Use o Bah Chat para obter insights rápidos sobre os dados.")
+    # Adiciona a resposta ao histórico e exibe
+    st.session_state.messages.append({"role": "assistant", "content": resposta})
+    with st.chat_message("assistant"):
+        st.markdown(resposta)
