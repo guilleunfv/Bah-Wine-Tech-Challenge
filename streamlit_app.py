@@ -12,22 +12,29 @@ openai.api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
 # Função para carregar e limpar os dados
 @st.cache_data
 def carregar_dados():
+    # Links fornecidos
     url1 = "https://drive.google.com/uc?id=1-mrtTLjOPh_XVk1mkDH00SUJxWkuOu5o"
     url2 = "https://docs.google.com/spreadsheets/d/1MOajBCCgeG2D48OWjh8DO-mJGjYw4L1O/export?format=csv"
-    dados1 = pd.read_csv(url1, delimiter=';', encoding='utf-8', quotechar='"')
-    dados2 = pd.read_csv(url2, delimiter=',', encoding='utf-8')
+    url3 = "https://docs.google.com/spreadsheets/d/1g_8E9lclXeK4rV1AihXYRqGIrkS6MKXs4_5wH40XwS4/export?format=csv"
 
+    # Carregar os arquivos
+    dados1 = pd.read_csv(url1, delimiter=';', encoding='utf-8')
+    dados2 = pd.read_csv(url2, encoding='utf-8')
+    dados3 = pd.read_csv(url3, encoding='utf-8')
+
+    # Limpeza e ajustes nos dados
     dados1.columns = dados1.columns.str.strip()
     dados1['País'] = dados1['País'].str.strip()
     dados1['Año'] = pd.to_numeric(dados1['Año'], errors='coerce')
     dados1 = dados1[(dados1['Año'] >= 2009) & (dados1['Año'] <= 2024)]  # Filtrar últimos 15 anos
 
     dados2.columns = dados2.columns.str.strip()
+    dados3.columns = dados3.columns.str.strip()
 
-    return dados1, dados2
+    return dados1, dados2, dados3
 
 # Carregar dados
-df1, df2 = carregar_dados()
+df1, df2, df3 = carregar_dados()
 
 # ----------------------------------------------------------
 # Adicionar link para download dos dados filtrados
@@ -110,12 +117,13 @@ st.pyplot(fig)
 # Gráfico 4: Categorias de Vinhos mais Exportadas
 st.subheader("🍇 Categorias de Vinhos mais Exportadas")
 if 'Descripción NCM' in df_filtrado.columns:
-    df_categoria = df_filtrado.groupby('Descripción NCM')['Valor US$ FOB'].sum().reset_index()
+    df_filtrado['Categoria Geral'] = df_filtrado['Descripción NCM'].apply(lambda x: x.split()[0])
+    df_categoria = df_filtrado.groupby('Categoria Geral')['Valor US$ FOB'].sum().reset_index()
     fig, ax = plt.subplots()
-    sns.barplot(data=df_categoria.sort_values(by='Valor US$ FOB', ascending=False), x='Valor US$ FOB', y='Descripción NCM', ax=ax, palette='magma', hue=None, dodge=False)
+    sns.barplot(data=df_categoria.sort_values(by='Valor US$ FOB', ascending=False), x='Valor US$ FOB', y='Categoria Geral', ax=ax, palette='magma', hue=None, dodge=False)
     ax.set_title("Receita por Categoria de Vinho (Exportação Brasileira)")
     ax.set_xlabel("Receita Total (US$)")
-    ax.set_ylabel("Categoria de Vinho")
+    ax.set_ylabel("Categoria Geral de Vinho")
     st.pyplot(fig)
 else:
     st.warning("Coluna 'Descripción NCM' não encontrada no dataset.")
