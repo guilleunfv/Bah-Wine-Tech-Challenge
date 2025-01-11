@@ -1,144 +1,145 @@
-import os
-import openai
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
-
-# Configuração da API Key
-openai.api_key = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-
-if not openai.api_key:
-    st.error("A chave API da OpenAI não foi encontrada. Configure-a no `secrets` ou como variável de ambiente.")
-    st.stop()
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
 
 # ----------------------------------------------------------
-# Título do App
-st.title("🍷 Bah Chat: Análise de Dados e Chatbot de Vinhos")
-
-st.write("""
-Bem-vindo ao Bah Chat!  
-Este aplicativo combina **análise de dados** de exportação de vinhos brasileiros e um **chatbot** baseado no modelo **GPT-3.5-turbo**.  
-Use os gráficos e dados interativos para explorar informações e faça perguntas no chatbot!
-""")
-
-# ----------------------------------------------------------
-# PARTE 1: Análise de Dados de Exportação de Vinhos
+# PARTE 1: Carregar os Dados
 # ----------------------------------------------------------
 
 @st.cache_data
 def carregar_dados():
-    try:
-        url = "https://drive.google.com/uc?id=1-mrtTLjOPh_XVk1mkDH00SUJxWkuOu5o"
-        dados = pd.read_csv(url, delimiter=';', encoding='utf-8', quotechar='"')
-        dados.columns = dados.columns.str.strip()
-        return dados
-    except Exception as e:
-        st.error(f"Erro ao carregar os dados: {e}")
-        return pd.DataFrame()
+    # URL dos dados
+    url = "https://drive.google.com/uc?id=1-mrtTLjOPh_XVk1mkDH00SUJxWkuOu5o"
+    dados = pd.read_csv(url, delimiter=';', encoding='utf-8', quotechar='"')
+    dados.columns = dados.columns.str.strip()  # Limpa espaços extras nas colunas
+    return dados
 
+# Carregar os dados
 df = carregar_dados()
 
-if not df.empty:
-    st.subheader("📊 Dados Gerais de Exportação de Vinhos")
-    st.dataframe(df)
+# ----------------------------------------------------------
+# PARTE 2: Gráficos Interativos
+# ----------------------------------------------------------
 
-    # Filtros Interativos
-    st.sidebar.header("Filtros")
-    anos = st.sidebar.multiselect(
-        "Selecione os Anos", 
-        df['Año'].unique(), 
-        default=df['Año'].unique()
-    )
-    paises = st.sidebar.multiselect(
-        "Selecione os Países", 
-        df['País'].unique(), 
-        default=df['País'].unique()[:10]
-    )
-
-    df_filtrado = df[df['Año'].isin(anos) & df['País'].isin(paises)]
-
-    st.subheader("📈 Dados Filtrados")
-    st.dataframe(df_filtrado)
-
-    # Gráfico 1: Tendência de Exportação
-    st.subheader("📉 Tendência de Exportação (US$ FOB por Ano)")
-    if not df_filtrado.empty:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        df_group_ano = df_filtrado.groupby('Año')['Valor US$ FOB'].sum().sort_index()
-        ax.plot(df_group_ano.index, df_group_ano.values, color='#8B0000', marker='o')
-        ax.set_title("Tendência de Exportação de Vinhos", fontsize=16)
-        ax.set_xlabel("Ano", fontsize=14)
-        ax.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
-        st.pyplot(fig)
-    else:
-        st.warning("Nenhum dado disponível para os filtros selecionados.")
+def criar_graficos(df):
+    st.subheader("📊 Análises Gráficas")
+    
+    # Gráfico 1: Exportação Total por Ano
+    st.write("### Exportação Total por Ano")
+    df_por_ano = df.groupby('Año')['Valor US$ FOB'].sum().sort_index()
+    fig1, ax1 = plt.subplots(figsize=(10, 5))
+    ax1.plot(df_por_ano.index, df_por_ano.values, marker='o', color='#8B0000')
+    ax1.set_title("Exportação Total por Ano", fontsize=16)
+    ax1.set_xlabel("Ano", fontsize=14)
+    ax1.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
+    st.pyplot(fig1)
 
     # Gráfico 2: Exportação por País
-    st.subheader("🌎 Exportação por País")
-    if not df_filtrado.empty:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        df_group_pais = df_filtrado.groupby('País')['Valor US$ FOB'].sum().sort_values(ascending=False).head(10)
-        df_group_pais.plot(kind='bar', color='#A52A2A', ax=ax)
-        ax.set_title("Top 10 Países de Destino", fontsize=16)
-        ax.set_xlabel("País", fontsize=14)
-        ax.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
-        st.pyplot(fig)
+    st.write("### Exportação por País")
+    df_por_pais = df.groupby('País')['Valor US$ FOB'].sum().sort_values(ascending=False)
+    fig2, ax2 = plt.subplots(figsize=(10, 5))
+    df_por_pais.plot(kind='bar', color='#4682B4', ax=ax2)
+    ax2.set_title("Exportação por País", fontsize=16)
+    ax2.set_xlabel("País", fontsize=14)
+    ax2.set_ylabel("Valor Total (US$ FOB)", fontsize=14)
+    st.pyplot(fig2)
+
+    # Gráfico 3: Preço Médio por Ano
+    st.write("### Preço Médio por Ano")
+    df['Preço Médio'] = df['Valor US$ FOB'] / df['Volume']
+    df_preco_medio = df.groupby('Año')['Preço Médio'].mean()
+    fig3, ax3 = plt.subplots(figsize=(10, 5))
+    ax3.bar(df_preco_medio.index, df_preco_medio.values, color='#FFD700')
+    ax3.set_title("Preço Médio por Ano", fontsize=16)
+    ax3.set_xlabel("Ano", fontsize=14)
+    ax3.set_ylabel("Preço Médio (US$ por Litro)", fontsize=14)
+    st.pyplot(fig3)
+
+# ----------------------------------------------------------
+# PARTE 3: Chatbot para Perguntas Baseadas no DataFrame
+# ----------------------------------------------------------
+
+def responder_pergunta(pergunta, df):
+    """
+    Responde à pergunta do usuário com base no DataFrame fornecido.
+    """
+    pergunta = pergunta.lower()
+    if "quem vende mais" in pergunta:
+        pais_top = df.groupby("País")["Valor US$ FOB"].sum().idxmax()
+        valor_top = df.groupby("País")["Valor US$ FOB"].sum().max()
+        return f"O país que mais compra vinhos do Brasil é **{pais_top}**, com um total de **US$ {valor_top:,.2f}**."
+    elif "ano com mais exportações" in pergunta:
+        ano_top = df.groupby("Año")["Valor US$ FOB"].sum().idxmax()
+        valor_top = df.groupby("Año")["Valor US$ FOB"].sum().max()
+        return f"O ano com mais exportações foi **{ano_top}**, com um total de **US$ {valor_top:,.2f}**."
+    elif "preço médio" in pergunta:
+        preco_medio = df["Valor US$ FOB"].sum() / df["Volume"].sum()
+        return f"O preço médio por litro exportado é **US$ {preco_medio:.2f}**."
+    elif "exportações totais" in pergunta:
+        total_exportado = df["Valor US$ FOB"].sum()
+        return f"As exportações totais de vinhos somam **US$ {total_exportado:,.2f}**."
+    elif "quais países" in pergunta:
+        paises = df["País"].unique()
+        return f"Os vinhos brasileiros foram exportados para os seguintes países: {', '.join(paises)}."
     else:
-        st.warning("Nenhum dado disponível para os filtros selecionados.")
+        return "Desculpe, não entendi sua pergunta. Tente reformular ou pergunte algo relacionado aos dados de exportação."
 
 # ----------------------------------------------------------
-# PARTE 2: Chatbot GPT-3.5 Conectado aos Dados
+# PARTE 4: Machine Learning (Predição de Exportações)
 # ----------------------------------------------------------
 
-st.subheader("🤖 Bah Chat: Chatbot GPT-3.5")
+def previsao_exportacao(df):
+    st.subheader("🤖 Previsão de Exportações")
+    st.write("Este modelo usa regressão linear para prever o valor exportado com base no volume.")
 
-# Função para gerar resposta com base no DataFrame filtrado
-def gerar_resposta(messages, df_filtrado):
-    # Tenta gerar resposta com base nos dados
-    ultima_pergunta = messages[-1]["content"]
-    try:
-        if "quem vende mais" in ultima_pergunta.lower():
-            pais_top = df_filtrado.groupby("País")["Valor US$ FOB"].sum().idxmax()
-            valor_top = df_filtrado.groupby("País")["Valor US$ FOB"].sum().max()
-            return f"O país que mais compra vinhos do Brasil é **{pais_top}**, com um total de **US$ {valor_top:,.2f}**."
-        elif "ano com mais exportações" in ultima_pergunta.lower():
-            ano_top = df_filtrado.groupby("Año")["Valor US$ FOB"].sum().idxmax()
-            valor_top = df_filtrado.groupby("Año")["Valor US$ FOB"].sum().max()
-            return f"O ano com mais exportações foi **{ano_top}**, com um total de **US$ {valor_top:,.2f}**."
-        else:
-            # Se não encontra resposta, usa o modelo GPT
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=messages,
-                temperature=0.7,
-                max_tokens=500
-            )
-            return response["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"Erro ao processar a pergunta: {e}"
+    # Prepara os dados
+    df = df.dropna(subset=["Valor US$ FOB", "Volume"])
+    X = df[["Volume"]]
+    y = df["Valor US$ FOB"]
 
-# Histórico de mensagens
-if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": "Você é um assistente útil para análise de exportação de vinhos."}]
+    # Divide em treino e teste
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Exibindo mensagens anteriores
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    # Treina o modelo
+    modelo = LinearRegression()
+    modelo.fit(X_train, y_train)
 
-# Entrada do usuário
-prompt = st.chat_input("Faça uma pergunta sobre os dados ou exportações de vinhos...")
-if prompt:
-    # Adiciona a mensagem do usuário
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    # Previsão
+    y_pred = modelo.predict(X_test)
+    erro = mean_squared_error(y_test, y_pred)
 
-    # Gera a resposta
-    resposta = gerar_resposta(st.session_state.messages, df_filtrado)
+    # Entrada do usuário para prever
+    volume_input = st.number_input("Digite o volume para prever o valor exportado (em litros):", min_value=0.0)
+    if volume_input:
+        previsao = modelo.predict([[volume_input]])
+        st.write(f"Com um volume de **{volume_input} litros**, o valor exportado previsto é **US$ {previsao[0]:,.2f}**.")
+    st.write(f"Erro do modelo (MSE): {erro:.2f}")
 
-    # Adiciona a resposta ao histórico e exibe
-    st.session_state.messages.append({"role": "assistant", "content": resposta})
-    with st.chat_message("assistant"):
-        st.markdown(resposta)
+# ----------------------------------------------------------
+# PARTE 5: Interface do Usuário
+# ----------------------------------------------------------
+
+st.title("🍷 Análise de Exportação de Vinhos")
+st.write("Explore os dados, visualize gráficos e faça perguntas ao chatbot sobre exportações de vinhos brasileiros.")
+
+# Exibe os dados
+with st.expander("📄 Ver Dados Brutos"):
+    st.dataframe(df)
+
+# Gráficos
+criar_graficos(df)
+
+# Chatbot
+st.subheader("🤖 Chatbot")
+pergunta = st.text_input("Digite sua pergunta:")
+if pergunta:
+    resposta = responder_pergunta(pergunta, df)
+    st.write(f"**Resposta:** {resposta}")
+
+# Previsão
+previsao_exportacao(df)
+
 

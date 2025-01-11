@@ -4,3 +4,4 @@ pandas
 matplotlib
 gdown
 plotly
+scikit-learn
